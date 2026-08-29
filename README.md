@@ -43,6 +43,8 @@
 3. Tick the **"use custom UI theme"** checkbox and select your chosen `.qbtheme` theme file.
 4. Click **Apply** and restart qBittorrent for the changes to take effect.
 
+The theme includes Catppuccin-colored toolbar and sidebar icons. qBittorrent 5.x ships its own bright default icons, so these replacements are bundled in the `.qbtheme` file.
+
 ### WebUI
 
 The Catppuccin theme for the WebUI is only available via
