@@ -31,31 +31,16 @@ jobs:
           echo "RCC=$RCC" >> "$GITHUB_ENV"
           "$RCC" --version
 
-      - name: Install whiskers
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-binstall
-
-      - name: Install whiskers binary
-        run: cargo binstall -y --locked catppuccin-whiskers
-
-      - name: Render templates
-        run: |
-          # TODO: replace with your repo's real render command
-          # (see README or justfile), e.g. whiskers templates/<file>.tera
-          echo "render step goes here"
-
       - name: Build themes
         shell: bash
         run: |
           set -euo pipefail
           rm -rf dist
           mkdir dist
-          for flavor in $(whiskers --list-flavors -o plain); do
-            "$RCC" --binary --compress-algo zlib \
-              "src/catppuccin-${flavor}/resources.qrc" \
-              -o "dist/catppuccin-${flavor}.qbtheme"
-            echo "Built dist/catppuccin-${flavor}.qbtheme"
+          for qrc in src/catppuccin-*/resources.qrc; do
+            flavor=$(basename "$(dirname "$qrc")")
+            "$RCC" --binary --compress-algo zlib "$qrc" -o "dist/${flavor}.qbtheme"
+            echo "Built dist/${flavor}.qbtheme"
           done
           ls -lh dist
 
