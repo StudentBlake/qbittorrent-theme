@@ -16,11 +16,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt5 rcc
+      - name: Install Qt 6.11.2
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.11.2"
+          host: linux
+          target: desktop
+          cache: true
+
+      - name: Locate rcc
         run: |
-          sudo apt-get update
-          sudo apt-get install -y qtbase5-dev-tools
-          echo "/usr/lib/qt5/bin" >> "$GITHUB_PATH"
+          RCC=$(find "$QT_ROOT_DIR" -type f -name rcc -perm -u+x | head -n1)
+          test -n "$RCC"
+          echo "RCC=$RCC" >> "$GITHUB_ENV"
+          "$RCC" --version
 
       - name: Install whiskers
         uses: taiki-e/install-action@v2
@@ -33,14 +42,21 @@ jobs:
       - name: Render templates
         run: |
           # TODO: replace with your repo's real render command
-          # (check the README or justfile), for example:
-          # whiskers templates/<file>.tera
+          # (see README or justfile), e.g. whiskers templates/<file>.tera
           echo "render step goes here"
 
       - name: Build themes
+        shell: bash
         run: |
-          chmod +x tools/build
-          tools/build
+          set -euo pipefail
+          rm -rf dist
+          mkdir dist
+          for flavor in $(whiskers --list-flavors -o plain); do
+            "$RCC" --binary --compress-algo zlib \
+              "src/catppuccin-${flavor}/resources.qrc" \
+              -o "dist/catppuccin-${flavor}.qbtheme"
+            echo "Built dist/catppuccin-${flavor}.qbtheme"
+          done
           ls -lh dist
 
       - name: Upload artifacts
