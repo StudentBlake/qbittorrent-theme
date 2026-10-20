@@ -1,0 +1,89 @@
+name: Build qBittorrent themes
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.11.2
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.11.2"
+          host: linux
+          target: desktop
+          cache: true
+
+      - name: Locate rcc
+        run: |
+          RCC=$(find "$QT_ROOT_DIR" -type f -name rcc -perm -u+x | head -n1)
+          test -n "$RCC"
+          echo "RCC=$RCC" >> "$GITHUB_ENV"
+          "$RCC" --version
+
+      - name: Build .qbtheme files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          found=0
+          # every directory that has a stylesheet.qss is a theme
+          while IFS= read -r qss; do
+            dir=$(dirname "$qss")
+            name=$(basename "$dir")
+            [ "$dir" = "." ] && name=$(basename "$GITHUB_REPOSITORY")
+
+            if [ ! -f "$dir/config.json" ]; then
+              echo "::warning::$dir has no config.json (needed for qBittorrent 4.3.0+)"
+            else
+              python3 -m json.tool "$dir/config.json" > /dev/null
+            fi
+
+            # generate a .qrc listing every file in the theme folder
+            qrc="$dir/resources.qrc"
+            {
+              echo '<RCC>'
+              echo '  <qresource prefix="/uitheme">'
+              (cd "$dir" && find . -type f ! -name 'resources.qrc' ! -name '*.md' \
+                 | sed 's|^\./||' | sort) | while read -r f; do
+                echo "    <file>$f</file>"
+              done
+              echo '  </qresource>'
+              echo '</RCC>'
+            } > "$qrc"
+
+            "$RCC" --binary "$qrc" -o "dist/${name}.qbtheme"
+            rm -f "$qrc"
+            echo "Built dist/${name}.qbtheme"
+            found=$((found+1))
+          done < <(find . -name stylesheet.qss -not -path './.git/*' -not -path './dist/*')
+
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No stylesheet.qss found, nothing to build"
+            exit 1
+          fi
+          ls -lh dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qbittorrent-themes
+          path: dist/*.qbtheme
+          if-no-files-found: error
+
+      - name: Publish release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.qbtheme
+          generate_release_notes: true
